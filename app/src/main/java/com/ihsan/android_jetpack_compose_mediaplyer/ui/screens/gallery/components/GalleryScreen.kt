@@ -2,11 +2,8 @@ package com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery.componen
 
 //noinspection UsingMaterialAndMaterial3Libraries
 import android.annotation.SuppressLint
-import android.net.Uri
-import android.util.Log
-import android.widget.StackView
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -17,19 +14,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material.ExperimentalMaterialApi
+//noinspection UsingMaterialAndMaterial3Libraries
 import androidx.compose.material.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -37,16 +39,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.android.exoplayer2.ExoPlayer
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.ui.PlayerView
@@ -56,13 +63,13 @@ import com.ihsan.android_jetpack_compose_mediaplyer.model.LocalMediaItem
 import com.ihsan.android_jetpack_compose_mediaplyer.model.MediaType
 import com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.MainActivity
 import com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery.GalleryViewModel
+import kotlinx.coroutines.launch
 
 
 private const val TAG = "GalleryScreen"
-//private val exoPlayer = ExoPlayer.Builder(MainActivity().applicationContext).build()
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun GalleryScreen(viewModel: GalleryViewModel) {
     val mediaItems by viewModel.localMediaItems.collectAsState()
@@ -70,11 +77,12 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
     val videoItems by viewModel.videoItems.collectAsState()
     val audioItems by viewModel.audioItems.collectAsState()
 
-    // State variable to track whether the bottom sheet is open
-    var bottomSheetState by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    var showBottomSheet by remember { mutableStateOf(false) }
+
     // State variable to track the selected media item
     var selectedLocalMediaItem by remember { mutableStateOf<LocalMediaItem?>(null) }
-    Log.d(TAG, "GalleryScreen: $mediaItems")
 
     val context = LocalContext.current
 
@@ -87,7 +95,7 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                 title = { Text(text = "Gallery") }
             )
         }
-    ) {
+    ) { contentPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -126,19 +134,29 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                 else -> mediaItems
             }
 
-            // Show bottom sheet when a media item is clicked
-//            if (selectedLocalMediaItem != null) {
-//                ModalBottomSheetLayout(
-//                    sheetState = ModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden),
-//                    sheetContent = {
-//                        // Content of the bottom sheet
-//                        //BottomSheetContent(selectedLocalMediaItem = selectedLocalMediaItem)
-//                    }
-//                ) {
-//                    // Existing code...
-//
-//                }
-//            }
+            if (showBottomSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = {
+                        showBottomSheet = false
+                    },
+                    sheetState = sheetState
+                ) {
+                    // Sheet content
+                    BottomSheetContent(
+                        viewModel = viewModel,
+                        selectedLocalMediaItem = selectedLocalMediaItem!!
+                    )
+                    Button(onClick = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion {
+                            if (!sheetState.isVisible) {
+                                showBottomSheet = false
+                            }
+                        }
+                    }) {
+                        Text("Hide bottom sheet")
+                    }
+                }
+            }
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
@@ -156,7 +174,7 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                     val previewResource = when (mediaItem.type) {
                         MediaType.VIDEO -> R.drawable.ic_video_placeholder
                         MediaType.AUDIO -> R.drawable.ic_audio_placeholder
-                        MediaType.IMAGE -> R.drawable.ic_image_placeholder
+                        MediaType.IMAGE -> filteredMediaItems[mediaIndex].data
                         else -> R.drawable.ic_placeholder // Handle unexpected types
                     }
 
@@ -167,14 +185,17 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                             .clickable {
                                 // Update selected media item
                                 selectedLocalMediaItem = mediaItem
+                                showBottomSheet = true
                                 // Open the bottom sheet
-                                bottomSheetState = true
+                                scope.launch {
+                                    sheetState.show()
+                                }
                             },
                         elevation = CardDefaults.cardElevation(
                             defaultElevation = 10.dp
                         )
                     ) {
-                        StackView(context).apply {
+                        Box(modifier = Modifier.fillMaxSize()) {
                             // Add media icon
                             Icon(
                                 imageVector = mediaIcon,
@@ -184,10 +205,15 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                                     .padding(4.dp)
                             )
 
-                            Image(
-                                painter = painterResource(id = previewResource),
-                                contentDescription = null, // Set descriptive contentDescription
-                                modifier = Modifier.fillMaxSize() // Adjust size as needed
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(previewResource)
+                                    .placeholder(R.drawable.ic_image_placeholder)
+                                    .build(),
+                                contentDescription = "",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .aspectRatio(1f)
                             )
 
                             Text(
@@ -197,7 +223,18 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                                 maxLines = 2,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(6.dp)
+                                softWrap = true,
+                                style = TextStyle(
+                                    color = Color.White,
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 5f
+                                    )
+                                ),
+                                modifier = Modifier
+                                    .padding(6.dp)
+                                    .align(Alignment.BottomCenter)
                             )
                         }
                     }
@@ -207,90 +244,82 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
     }
 }
 
-//@Composable
-//fun BottomSheetContent(selectedLocalMediaItem: LocalMediaItem?) {
-//    val context = LocalContext.current
-//
-//    if (selectedLocalMediaItem != null) {
-//        val mediaType = selectedLocalMediaItem.type
-//        Column(
-//            modifier = Modifier.fillMaxWidth()
-//        ) {
-//            Text(
-//                text = "Selected Media: ${selectedLocalMediaItem.displayName}",
-//                fontSize = 18.sp,
-//                modifier = Modifier.padding(16.dp),
-//                color = Color.Black
-//            )
-//            when (mediaType) {
-//                MediaType.VIDEO -> {
-//                    VideoPlayerComponent(url = selectedLocalMediaItem.data) // Assuming you have a VideoPlayerComponent
-//                }
-//
-//                MediaType.AUDIO -> {
-//                    AudioPlayerComponent(url = selectedLocalMediaItem.data) // Assuming you have an AudioPlayerComponent
-//                }
-//
-//                MediaType.IMAGE -> {
-//                    Image(
-//                        painter = painterResource(id = R.drawable.ic_image_placeholder), // Use a placeholder while loading
-//                        contentDescription = selectedLocalMediaItem.displayName,
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .aspectRatio(4 / 3f) // Adjust based on image aspect ratio
-//                        // Load and display the actual image here (not shown)
-//                    )
-//                }
-//
-//                else -> {
-//                    Text(text = "Unsupported media type")
-//                }
-//            }
-//            // Add more options/buttons as needed
-//        }
-//    } else {
-//        // Show loading indicator or "No media selected" message
-//    }
-//}
-//
-//@Composable
-//fun VideoPlayerComponent(url: String) {
-//    // create a media item.
-//    val mediaItem = MediaItem.Builder()
-//        .setUri(url)
-//        .build()
-//
-//    // Create a media source and pass the media item
-//    val mediaSource = ProgressiveMediaSource.Factory(
-//        DefaultDataSource.Factory(MainActivity().applicationContext) // <- context
-//    )
-//        .createMediaSource(mediaItem)
-//    DisposableEffect(exoPlayer) {
-//        onDispose {
-//            exoPlayer.stop()
-//            exoPlayer.release()
-//        }
-//    }
-//    // Prepare the media item
-//    exoPlayer.setMediaSource(mediaSource)
-//
-//    // Configure PlayerView (using a custom layout with controls)
-//    val playerView = PlayerView(MainActivity().applicationContext)
-//    playerView.player = exoPlayer
-//    playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING) // Optional: show buffering indicator
-//    //playerView.setShowNext() // Optional: show next video button
-//    // Add more configuration and controls as needed
-//
-//    Column {
-//        // Display PlayerView or custom layout with controls
-//        //playerView.height= 300.dp
-//
-//        // Additional controls can be added here (e.g., seek bar, volume)
-//    }
-//}
-//
-//@Composable
-//fun AudioPlayerComponent(url: String) {
+@Composable
+fun BottomSheetContent(viewModel: GalleryViewModel, selectedLocalMediaItem: LocalMediaItem) {
+    // Your bottom sheet content, for example:
+    Box(
+        modifier = Modifier
+            .padding(16.dp)
+            .fillMaxSize(),
+    ) {
+        Text(text = selectedLocalMediaItem.displayName)
+
+        when (selectedLocalMediaItem.type) {
+            MediaType.VIDEO -> {
+                VideoPlayerComponent(viewModel = viewModel, url = selectedLocalMediaItem.data)
+            }
+
+            MediaType.AUDIO -> {
+                AudioPlayerComponent(selectedLocalMediaItem.data)
+            }
+
+            MediaType.IMAGE -> {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(selectedLocalMediaItem.data)
+                        .placeholder(R.drawable.ic_image_placeholder)
+                        .build(),
+                    contentDescription = "",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .aspectRatio(1f)
+                )
+            }
+
+            else -> {
+                // Handle unexpected types
+            }
+        }
+    }
+}
+
+
+@Composable
+fun VideoPlayerComponent(viewModel: GalleryViewModel, url: String) {
+    // Create an ExoPlayer instance
+    val exoPlayer = viewModel.exoPlayer
+    // create a media item.
+    val mediaItem = MediaItem.Builder()
+        .setUri(url)
+        .build()
+
+    // Create a media source and pass the media item
+    val mediaSource = ProgressiveMediaSource.Factory(
+        DefaultDataSource.Factory(MainActivity().applicationContext) // <- context
+    )
+        .createMediaSource(mediaItem)
+    DisposableEffect(exoPlayer) {
+        onDispose {
+            exoPlayer.stop()
+            exoPlayer.release()
+        }
+    }
+    // Prepare the media item
+    exoPlayer.setMediaSource(mediaSource)
+    exoPlayer.prepare()
+    // Display the video player
+    Column {
+        PlayerView(MainActivity().applicationContext).apply {
+            player = exoPlayer
+            player?.playWhenReady = true
+            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING) // Optional: show buffering indicator
+            this.setShowNextButton(true) // Optional: show next video button
+        }
+    }
+}
+
+@Composable
+fun AudioPlayerComponent(url: String) {
 //    val mediaItem = MediaItem.fromUri(Uri.parse(url))
 //    val mediaSource = ProgressiveMediaSource.Factory(
 //        DefaultDataSource.Factory(MainActivity().applicationContext) // <- context
@@ -304,8 +333,8 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 //    }
 //
 //    exoPlayer.setMediaSource(mediaSource)
-//    // Display controls without specific view for audio
-//    Column {
-//        // Add audio player controls here (e.g., play/pause, seek bar)
-//    }
-//}
+    // Display controls without specific view for audio
+    Column {
+        // Add audio player controls here (e.g., play/pause, seek bar)
+    }
+}

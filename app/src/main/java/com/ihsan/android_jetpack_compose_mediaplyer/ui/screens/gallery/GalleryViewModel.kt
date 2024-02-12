@@ -2,15 +2,19 @@ package com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import com.google.android.exoplayer2.ExoPlayer
 import com.ihsan.android_jetpack_compose_mediaplyer.data.local.MediaRepository
 import com.ihsan.android_jetpack_compose_mediaplyer.model.LocalMediaItem
 import com.ihsan.android_jetpack_compose_mediaplyer.model.MediaType
+import com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.MainActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class GalleryViewModel(context:Context) : ViewModel() {
     private val mediaRepository = MediaRepository(context.contentResolver)
+
+    val exoPlayer = ExoPlayer.Builder(context).build()
 
     private val _Local_mediaItems = MutableStateFlow<List<LocalMediaItem>>(emptyList())
     val localMediaItems: StateFlow<List<LocalMediaItem>> = _Local_mediaItems.asStateFlow()
