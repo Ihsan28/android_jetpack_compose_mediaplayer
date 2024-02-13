@@ -50,7 +50,6 @@ class MediaRepository(private val contentResolver: ContentResolver) {
                 do {
                     val id = cursor.getLong(idColumn)
                     val displayName = cursor.getString(displayNameColumn) ?: "Unknown"
-                    Log.d(TAG, "displayName: $displayName")
                     val mediaType = cursor.getInt(mediaTypeColumn)
                     Log.d(TAG, "mediaType: ${getMediaType(mediaType)}")
                     val dateAdded = cursor.getLong(dateAddedColumn)

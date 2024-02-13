@@ -77,9 +77,7 @@ dependencies {
 
     implementation ("io.coil-kt:coil-compose:2.2.2")
 
-//    // ExoPlayer
-//    implementation ("com.google.android.exoplayer:exoplayer:2.19.1")
-//    implementation ("com.google.android.exoplayer:exoplayer-ui:2.19.1")
     implementation ("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
     implementation ("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("androidx.media3:media3-ui:1.2.1")
 }

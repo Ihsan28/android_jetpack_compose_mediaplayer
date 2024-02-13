@@ -2,13 +2,14 @@ package com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery.componen
 
 //noinspection UsingMaterialAndMaterial3Libraries
 import android.annotation.SuppressLint
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,12 +19,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,7 +33,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -62,9 +59,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.PopupProperties
+import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.ihsan.android_jetpack_compose_mediaplyer.R
@@ -91,7 +88,7 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 
     // State variable to track the selected media item
     var selectedLocalMediaItem by remember { mutableStateOf<LocalMediaItem?>(null) }
-    var selectedLocalMediaItemIndex by remember { mutableStateOf(0) }
+    var selectedLocalMediaItemIndex by remember { mutableIntStateOf(0) }
 
     val context = LocalContext.current
 
@@ -109,10 +106,11 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            Spacer(modifier = Modifier.height(50.dp))
+            Spacer(modifier = Modifier.height(60.dp))
             TabRow(
                 modifier = Modifier
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .height(50.dp),
                 selectedTabIndex = selectedTabIndex,
                 contentColor = Color.Cyan
 
@@ -154,6 +152,7 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                     BottomSheetContent(
                         viewModel = viewModel,
                         selectedLocalMediaItem = selectedLocalMediaItem!!,
+                        filteredMediaItems = filteredMediaItems,
                         selectedLocalMediaItemIndex = selectedLocalMediaItemIndex
                     )
                     Button(onClick = {
@@ -259,12 +258,12 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 fun BottomSheetContent(
     viewModel: GalleryViewModel,
     selectedLocalMediaItem: LocalMediaItem,
+    filteredMediaItems: List<LocalMediaItem>,
     selectedLocalMediaItemIndex: Int
 ) {
-    // Your bottom sheet content, for example:
-    Box(
+
+    Column(
         modifier = Modifier
-            .padding(16.dp)
             .fillMaxSize(),
     ) {
         Text(text = selectedLocalMediaItem.displayName)
@@ -273,7 +272,7 @@ fun BottomSheetContent(
             MediaType.VIDEO -> {
                 VideoPlayerComponent(
                     viewModel = viewModel,
-                    url = selectedLocalMediaItem.data,
+                    videoMediaItems = filteredMediaItems,
                     index = selectedLocalMediaItemIndex
                 )
             }
@@ -281,7 +280,7 @@ fun BottomSheetContent(
             MediaType.AUDIO -> {
                 AudioPlayerComponent(
                     viewModel = viewModel,
-                    url = selectedLocalMediaItem.data,
+                    audioMediaItems = filteredMediaItems,
                     index = selectedLocalMediaItemIndex
                 )
             }
@@ -294,6 +293,7 @@ fun BottomSheetContent(
                         .build(),
                     contentDescription = "",
                     modifier = Modifier
+                        .fillMaxWidth()
                         .fillMaxSize()
                         .aspectRatio(1f)
                 )
@@ -306,23 +306,77 @@ fun BottomSheetContent(
     }
 }
 
-
 @SuppressLint("StateFlowValueCalledInComposition")
 @Composable
-fun VideoPlayerComponent(viewModel: GalleryViewModel, url: String, index: Int) {
-    // Create an ExoPlayer instance
-    val exoPlayer = viewModel.exoPlayer
-    val songs = viewModel.videoItems.value
-    val selectedSong = remember { mutableStateOf(songs[0]) }
+fun VideoPlayerComponent(viewModel: GalleryViewModel,videoMediaItems: List<LocalMediaItem>, index: Int) {
+    val selectedSong = remember { mutableStateOf(videoMediaItems[index]) }
+    var expanded by remember { mutableStateOf(false) }
     // Display the video player
-    Column {
-        MusicPlayer(song = selectedSong.value, exoPlayer, viewModel)
-
+    Box {
+        MusicPlayer(song = selectedSong.value, viewModel)
+        IconButton(onClick = { expanded = !expanded }) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More"
+            )
+        }
         DropdownMenu(
-            expanded = false,
-            onDismissRequest = {})
+            properties = PopupProperties(
+                focusable = true,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+                clippingEnabled = true
+            ),
+            expanded = expanded,
+            onDismissRequest = {
+                expanded = false
+            })
         {
-            songs.forEach { song ->
+            videoMediaItems.forEach { song ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = song.displayName,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    onClick = {
+                        selectedSong.value = song
+
+                    }
+                )
+            }
+        }
+
+    }
+}
+
+@Composable
+fun AudioPlayerComponent(viewModel: GalleryViewModel,audioMediaItems:List<LocalMediaItem>, index: Int) {
+    val selectedSong = remember { mutableStateOf(audioMediaItems[index]) }
+    var expanded by remember { mutableStateOf(false) }
+    // Display the video player
+    Box {
+        MusicPlayer(song = selectedSong.value, viewModel)
+        IconButton(onClick = { expanded = !expanded }) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More"
+            )
+        }
+        DropdownMenu(
+            properties = PopupProperties(
+                focusable = true,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+                clippingEnabled = true
+            ),
+            expanded = expanded,
+            onDismissRequest = {
+                expanded = false
+            })
+        {
+            audioMediaItems.forEach { song ->
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -333,141 +387,99 @@ fun VideoPlayerComponent(viewModel: GalleryViewModel, url: String, index: Int) {
                     onClick = {
                         selectedSong.value = song
                         // Add navigation or playback actions
+                        viewModel.seekToPlayer(0)
                     }
                 )
             }
         }
-
     }
 }
 
-@SuppressLint("StateFlowValueCalledInComposition")
 @Composable
-fun AudioPlayerComponent(viewModel: GalleryViewModel, url: String, index: Int) {
-    // Create an ExoPlayer instance
+fun MusicPlayer(song: LocalMediaItem, viewModel: GalleryViewModel) {
+
     val exoPlayer = viewModel.exoPlayer
-    val songs = viewModel.audioItems.value
-    val selectedSong = remember { mutableStateOf(songs[0]) }
-    // Display the video player
-    Column {
-        MusicPlayer(song = selectedSong.value, exoPlayer, viewModel)
-
-        DropdownMenu(
-            expanded = false,
-            onDismissRequest = {})
-        {
-            songs.forEach { song ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = song.displayName,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    },
-                    onClick = {
-                        selectedSong.value = song
-                        // Add navigation or playback actions
-                        viewModel.seekTo(0)
-                    }
-                )
-            }
-        }
-
+    val playerView= PlayerView(LocalContext.current)
+    val playerState = viewModel.playerState.value
+    val context = LocalContext.current
+    LaunchedEffect(exoPlayer) {
+        viewModel.prepareMediaSource(song, context)
+        playerView.player = exoPlayer
+        Log.d(TAG, "MusicPlayer: $song")
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MusicPlayer(song: LocalMediaItem, exoPlayer: ExoPlayer, viewModel: GalleryViewModel) {
-
-    val state = viewModel.playerState.value
-    var listener: Player.Listener? = null
-    viewModel.prepareMediaSource(song, LocalContext.current)
     DisposableEffect(exoPlayer) {
         onDispose {
-            exoPlayer.stop()
-            exoPlayer.release()
-            exoPlayer.removeListener(listener!!)
+            viewModel.disposePlayer()
         }
     }
 
-    LaunchedEffect(song) {
-        try {
-            // Update states based on ExoPlayer events (onDispose to release resources)
-            listener = object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    viewModel.handlePlayerError(error)
-                }
+    AndroidView(factory = {playerView}, modifier = Modifier.fillMaxWidth())
 
-                // Update other player states as needed
-            }
-            exoPlayer.addListener(listener!!)
-        } catch (e: Exception) {
-            viewModel.handlePlayerError(e)
-        }
-    }
-
-    if (state.error != null) {
-        // Display error message
-        Text(text = "Error: ${state.error}", color = MaterialTheme.colorScheme.error)
-    } else {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // ... (previous Image, title, artist code)
-            //... (next Image, title, artist code)
-
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Slider(
-                value = state.currentPosition.toFloat() / state.duration.toFloat(),
-                onValueChange = { viewModel.seekTo((it * state.duration).toLong()) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(onClick = {}) { // Replace with previous track function }
-                    Icon(
-                        imageVector = Icons.Filled.SkipPrevious,
-                        contentDescription = "Previous Track",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                IconButton(onClick = { viewModel.playPause() }) {
-                    Icon(
-                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = "Play/Pause",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                IconButton(onClick = {}) { // Replace with next track function }
-                    Icon(
-                        imageVector = Icons.Filled.SkipNext,
-                        contentDescription = "Next Track",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            Text(
-                text = "${millisToFormattedTime(state.currentPosition)} / ${
-                    millisToFormattedTime(
-                        state.duration
-                    )
-                }",
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
+//    if (playerState.error != null) {
+//        // Display error message
+//        Text(text = "Error: ${playerState.error}", color = MaterialTheme.colorScheme.error)
+//    } else {
+//        Column(
+//            modifier = Modifier.fillMaxWidth()
+//        ) {
+//            // ... (previous Image, title, artist code)
+//            //... (next Image, title, artist code)
+//
+//
+//            Spacer(modifier = Modifier.height(18.dp))
+//            Slider(
+//                value = playerState.currentPosition.toFloat() / playerState.duration.toFloat()
+//                    .coerceAtLeast(1f),
+//                onValueChange = {
+//                    viewModel.seekToPlayer((it * playerState.duration).toLong())
+//                },
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .padding(horizontal = 16.dp)
+//            )
+//
+//            Spacer(modifier = Modifier.height(18.dp))
+//            Row(
+//                modifier = Modifier.fillMaxWidth(),
+//                horizontalArrangement = Arrangement.SpaceBetween
+//            ) {
+//                IconButton(onClick = {}) { // Replace with previous track function }
+//                    Icon(
+//                        imageVector = Icons.Filled.SkipPrevious,
+//                        contentDescription = "Previous Track",
+//                        tint = MaterialTheme.colorScheme.primary
+//                    )
+//                }
+//
+//                IconButton(onClick = { viewModel.playPause() }) {
+//                    Icon(
+//                        imageVector = if (playerState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+//                        contentDescription = "Play/Pause",
+//                        tint = MaterialTheme.colorScheme.primary
+//                    )
+//                }
+//
+//                IconButton(onClick = {}) { // Replace with next track function }
+//                    Icon(
+//                        imageVector = Icons.Filled.SkipNext,
+//                        contentDescription = "Next Track",
+//                        tint = MaterialTheme.colorScheme.primary
+//                    )
+//                }
+//            }
+//
+//            Text(
+//                text = "${millisToFormattedTime(playerState.currentPosition)} / ${
+//                    millisToFormattedTime(
+//                        playerState.duration
+//                    )
+//                }",
+//                modifier = Modifier.align(Alignment.CenterHorizontally),
+//                style = MaterialTheme.typography.bodySmall
+//            )
+//        }
+//    }
 }
 
 fun millisToFormattedTime(millis: Long): String {
@@ -476,6 +488,3 @@ fun millisToFormattedTime(millis: Long): String {
     val remainingSeconds = seconds % 60
     return "${minutes}:${remainingSeconds}"
 }
-
-
-
