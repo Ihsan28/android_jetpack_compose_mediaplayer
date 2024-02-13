@@ -1,20 +1,60 @@
 package com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery
 
 import android.content.Context
+import android.net.Uri
+import androidx.annotation.OptIn
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import com.google.android.exoplayer2.ExoPlayer
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.ihsan.android_jetpack_compose_mediaplyer.data.local.MediaRepository
 import com.ihsan.android_jetpack_compose_mediaplyer.model.LocalMediaItem
 import com.ihsan.android_jetpack_compose_mediaplyer.model.MediaType
+import com.ihsan.android_jetpack_compose_mediaplyer.model.PlayerState
 import com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.MainActivity
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class GalleryViewModel(context:Context) : ViewModel() {
+class GalleryViewModel(context: Context) : ViewModel() {
     private val mediaRepository = MediaRepository(context.contentResolver)
 
     val exoPlayer = ExoPlayer.Builder(context).build()
+    val playerState = mutableStateOf(PlayerState())
+
+    fun playPause(): Unit{
+        if (playerState.value.isPlaying) {
+            exoPlayer.pause()
+        } else {
+            exoPlayer.playWhenReady = true
+        }
+        playerState.value = playerState.value.copy(isPlaying = !playerState.value.isPlaying)
+    }
+
+    fun seekTo(position: Long) {
+        exoPlayer.seekTo(position)
+    }
+    fun handlePlayerError(error: Exception) {
+        playerState.value = playerState.value.copy(
+            error = "Error: ${error.message}"
+        )
+    }
+
+    @OptIn(UnstableApi::class)
+    fun prepareMediaSource(song: LocalMediaItem, context: Context) {
+        val mediaItem = MediaItem.Builder()
+            .setUri(Uri.parse(song.data))
+            .build()
+        val mediaSource = ProgressiveMediaSource.Factory(
+            DefaultDataSource.Factory(context)
+        ).createMediaSource(mediaItem)
+        exoPlayer.setMediaSource(mediaSource)
+        exoPlayer.prepare()
+    }
 
     private val _Local_mediaItems = MutableStateFlow<List<LocalMediaItem>>(emptyList())
     val localMediaItems: StateFlow<List<LocalMediaItem>> = _Local_mediaItems.asStateFlow()

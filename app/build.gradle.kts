@@ -58,7 +58,6 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.6.1")
     implementation("androidx.compose.ui:ui-graphics:1.6.1")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.1")
-    implementation("androidx.compose.material:material:1.6.1")
     implementation("androidx.compose.material:material-icons-core:1.6.1")
     implementation("androidx.compose.material:material-icons-extended:1.6.1")
     //material3
@@ -78,8 +77,9 @@ dependencies {
 
     implementation ("io.coil-kt:coil-compose:2.2.2")
 
-    // ExoPlayer
-    implementation ("com.google.android.exoplayer:exoplayer:2.19.1")
-    implementation ("com.google.android.exoplayer:exoplayer-ui:2.19.1")
-
+//    // ExoPlayer
+//    implementation ("com.google.android.exoplayer:exoplayer:2.19.1")
+//    implementation ("com.google.android.exoplayer:exoplayer-ui:2.19.1")
+    implementation ("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
+    implementation ("androidx.media3:media3-exoplayer:1.2.1")
 }

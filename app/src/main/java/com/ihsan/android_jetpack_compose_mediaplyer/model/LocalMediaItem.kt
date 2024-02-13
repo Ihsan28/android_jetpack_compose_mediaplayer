@@ -15,3 +15,11 @@ enum class MediaType {
     IMAGE,
     UNKNOWN
 }
+data class Song(val id: Int, val title: String, val artist: String, val filePath: String)
+data class PlayerState(
+    val isPlaying: Boolean = false,
+    val currentPosition: Long = 0L,
+    val bufferedPosition: Long = 0L,
+    val duration: Long = 0L,
+    val error: String? = null
+)
