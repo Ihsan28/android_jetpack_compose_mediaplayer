@@ -1,15 +1,14 @@
 package com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery.components
 
-//noinspection UsingMaterialAndMaterial3Libraries
 import android.annotation.SuppressLint
+import android.graphics.drawable.Drawable
 import android.util.Log
-import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,9 +49,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -64,10 +65,18 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.CenterCrop
+import com.bumptech.glide.load.resource.bitmap.FitCenter
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
+import com.bumptech.glide.request.RequestOptions
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
 import com.ihsan.android_jetpack_compose_mediaplyer.R
 import com.ihsan.android_jetpack_compose_mediaplyer.model.LocalMediaItem
 import com.ihsan.android_jetpack_compose_mediaplyer.model.MediaType
 import com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery.GalleryViewModel
+import com.skydoves.landscapist.rememberDrawablePainter
 import kotlinx.coroutines.launch
 
 
@@ -169,31 +178,24 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier.padding(8.dp).fillMaxSize()
             ) {
                 items(filteredMediaItems.size) { mediaIndex ->
-                    val mediaItem = filteredMediaItems[mediaIndex]
-                    val mediaIcon = when (mediaItem.type) {
+                    val currentMediaItem = filteredMediaItems[mediaIndex]
+                    val mediaIcon = when (currentMediaItem.type) {
                         MediaType.VIDEO -> Icons.Default.Movie
                         MediaType.AUDIO -> Icons.Default.MusicNote
                         MediaType.IMAGE -> Icons.Default.Image
                         else -> Icons.Default.Image
                     }
 
-                    val previewResource = when (mediaItem.type) {
-                        MediaType.VIDEO -> R.drawable.ic_video_placeholder
-                        MediaType.AUDIO -> R.drawable.ic_audio_placeholder
-                        MediaType.IMAGE -> filteredMediaItems[mediaIndex].data
-                        else -> R.drawable.ic_placeholder // Handle unexpected types
-                    }
-
                     Card(
                         modifier = Modifier
-                            .padding(4.dp)
-                            .fillMaxWidth()
+                            .padding(2.dp)
+                            .aspectRatio(1f)
                             .clickable {
                                 // Update selected media item
-                                selectedLocalMediaItem = mediaItem
+                                selectedLocalMediaItem = currentMediaItem
                                 selectedLocalMediaItemIndex = mediaIndex
                                 showBottomSheet = true
                                 // Open the bottom sheet
@@ -209,25 +211,16 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                             // Add media icon
                             Icon(
                                 imageVector = mediaIcon,
-                                contentDescription = mediaItem.displayName,
+                                contentDescription = currentMediaItem.displayName,
                                 modifier = Modifier
                                     .size(20.dp)
                                     .padding(4.dp)
                             )
 
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(previewResource)
-                                    .placeholder(R.drawable.ic_image_placeholder)
-                                    .build(),
-                                contentDescription = "",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .aspectRatio(1f)
-                            )
+                            GlideImage(mediaItem =currentMediaItem)
 
                             Text(
-                                text = mediaItem.displayName,
+                                text = currentMediaItem.displayName,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
                                 maxLines = 2,
@@ -251,6 +244,71 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun GlideImage(mediaItem: LocalMediaItem, modifier: Modifier = Modifier,keepOriginalShape:Boolean=false) {
+    // Holding image data with MutableState
+    var image by remember { mutableStateOf<Drawable?>(null) }
+    // Fetching the Context inside Compose using LocalContext.current
+    val context = LocalContext.current
+    val placeholder =when (mediaItem.type) {
+        MediaType.VIDEO -> R.drawable.ic_video_placeholder
+        MediaType.AUDIO -> R.drawable.ic_audio_placeholder
+        MediaType.IMAGE -> R.drawable.ic_image_placeholder
+        else -> R.drawable.ic_placeholder
+    }
+
+    val imageShape=if(keepOriginalShape) FitCenter() else CenterCrop()
+
+    val customTarget=if(keepOriginalShape) {
+        object : CustomTarget<Drawable>() {
+            override fun onResourceReady(
+                resource: Drawable,
+                transition: Transition<in Drawable>?
+            ) {
+                image = resource
+            }
+
+            override fun onLoadCleared(placeholder: Drawable?) {
+                // Handle when the image load is cleared
+            }
+        }
+    }else{
+        object : CustomTarget<Drawable>() {
+            override fun onResourceReady(
+                resource: Drawable,
+                transition: Transition<in Drawable>?
+            ) {
+                image = resource
+            }
+
+            override fun onLoadCleared(placeholder: Drawable?) {
+                // Handle when the image load is cleared
+            }
+        }
+    }
+
+    // Loading the image using the Glide library
+    val glideRequest=Glide.with(context)
+        .load(mediaItem.data)
+        .transform(imageShape, RoundedCorners(8))
+        .placeholder(placeholder)
+        .error(R.drawable.ic_placeholder)
+        .into(customTarget)
+
+
+    // If there is an image, display it
+    image?.let {
+        Image(
+            painter = rememberDrawablePainter(it),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+                .fillMaxSize()
+                .clip(MaterialTheme.shapes.medium)
+        )
     }
 }
 
@@ -286,17 +344,7 @@ fun BottomSheetContent(
             }
 
             MediaType.IMAGE -> {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(selectedLocalMediaItem.data)
-                        .placeholder(R.drawable.ic_image_placeholder)
-                        .build(),
-                    contentDescription = "",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxSize()
-                        .aspectRatio(1f)
-                )
+                GlideImage(mediaItem =selectedLocalMediaItem,modifier = Modifier.fillMaxSize(),keepOriginalShape = true)
             }
 
             else -> {
@@ -308,7 +356,11 @@ fun BottomSheetContent(
 
 @SuppressLint("StateFlowValueCalledInComposition")
 @Composable
-fun VideoPlayerComponent(viewModel: GalleryViewModel,videoMediaItems: List<LocalMediaItem>, index: Int) {
+fun VideoPlayerComponent(
+    viewModel: GalleryViewModel,
+    videoMediaItems: List<LocalMediaItem>,
+    index: Int
+) {
     val selectedSong = remember { mutableStateOf(videoMediaItems[index]) }
     var expanded by remember { mutableStateOf(false) }
     // Display the video player
@@ -352,7 +404,11 @@ fun VideoPlayerComponent(viewModel: GalleryViewModel,videoMediaItems: List<Local
 }
 
 @Composable
-fun AudioPlayerComponent(viewModel: GalleryViewModel,audioMediaItems:List<LocalMediaItem>, index: Int) {
+fun AudioPlayerComponent(
+    viewModel: GalleryViewModel,
+    audioMediaItems: List<LocalMediaItem>,
+    index: Int
+) {
     val selectedSong = remember { mutableStateOf(audioMediaItems[index]) }
     var expanded by remember { mutableStateOf(false) }
     // Display the video player
@@ -399,7 +455,7 @@ fun AudioPlayerComponent(viewModel: GalleryViewModel,audioMediaItems:List<LocalM
 fun MusicPlayer(song: LocalMediaItem, viewModel: GalleryViewModel) {
 
     val exoPlayer = viewModel.exoPlayer
-    val playerView= PlayerView(LocalContext.current)
+    val playerView = PlayerView(LocalContext.current)
     val playerState = viewModel.playerState.value
     val context = LocalContext.current
     LaunchedEffect(exoPlayer) {
@@ -414,7 +470,7 @@ fun MusicPlayer(song: LocalMediaItem, viewModel: GalleryViewModel) {
         }
     }
 
-    AndroidView(factory = {playerView}, modifier = Modifier.fillMaxWidth())
+    AndroidView(factory = { playerView }, modifier = Modifier.fillMaxWidth())
 
 //    if (playerState.error != null) {
 //        // Display error message

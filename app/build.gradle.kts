@@ -75,9 +75,15 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.1")
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.6.1")
 
-    implementation ("io.coil-kt:coil-compose:2.2.2")
+    implementation("io.coil-kt:coil-compose:2.2.2")
 
-    implementation ("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
-    implementation ("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.media3:media3-ui:1.2.1")
+
+    //glide
+//    implementation("com.github.bumptech.glide:glide:4.12.0")
+//    implementation("com.github.bumptech.glide:compose-integration:4.14.2")
+//    implementation("com.google.accompanist:accompanist-glide:0.19.0")
+    implementation("com.github.skydoves:landscapist-glide:1.3.7")
 }
