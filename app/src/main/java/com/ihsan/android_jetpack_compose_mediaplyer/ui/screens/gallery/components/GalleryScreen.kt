@@ -3,6 +3,7 @@ package com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery.componen
 import android.annotation.SuppressLint
 import android.graphics.drawable.Drawable
 import android.util.Log
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -16,12 +17,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -42,6 +44,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -63,13 +67,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.PopupProperties
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
 import com.bumptech.glide.load.resource.bitmap.FitCenter
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
-import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.ihsan.android_jetpack_compose_mediaplyer.R
@@ -83,7 +84,7 @@ import kotlinx.coroutines.launch
 private const val TAG = "GalleryScreen"
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun GalleryScreen(viewModel: GalleryViewModel) {
     val mediaItems by viewModel.localMediaItems.collectAsState()
@@ -93,6 +94,11 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(
+        pageCount = { 3 },
+        initialPageOffsetFraction = 2f,
+        initialPage = 1
+    )
     var showBottomSheet by remember { mutableStateOf(false) }
 
     // State variable to track the selected media item
@@ -103,6 +109,14 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 
     // Variable to keep track of the selected tab index
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+
+    // Filter media items based on the selected tab
+    val filteredMediaItems = when (selectedTabIndex) {
+        0 -> videoItems
+        1 -> audioItems
+        2 -> imageItems
+        else -> mediaItems
+    }
 
     Scaffold(
         topBar = {
@@ -142,15 +156,8 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Filter media items based on the selected tab
-            val filteredMediaItems = when (selectedTabIndex) {
-                0 -> videoItems
-                1 -> audioItems
-                2 -> imageItems
-                else -> mediaItems
-            }
-
             if (showBottomSheet) {
+                // Open the bottom sheet
                 ModalBottomSheet(
                     onDismissRequest = {
                         showBottomSheet = false
@@ -164,21 +171,14 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                         filteredMediaItems = filteredMediaItems,
                         selectedLocalMediaItemIndex = selectedLocalMediaItemIndex
                     )
-                    Button(onClick = {
-                        scope.launch { sheetState.hide() }.invokeOnCompletion {
-                            if (!sheetState.isVisible) {
-                                showBottomSheet = false
-                            }
-                        }
-                    }) {
-                        Text("Hide bottom sheet")
-                    }
                 }
             }
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.padding(8.dp).fillMaxSize()
+                modifier = Modifier
+                    .padding(8.dp)
+                    .fillMaxSize()
             ) {
                 items(filteredMediaItems.size) { mediaIndex ->
                     val currentMediaItem = filteredMediaItems[mediaIndex]
@@ -207,43 +207,48 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                             defaultElevation = 10.dp
                         )
                     ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            // Add media icon
-                            Icon(
-                                imageVector = mediaIcon,
-                                contentDescription = currentMediaItem.displayName,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .padding(4.dp)
-                            )
-
-                            GlideImage(mediaItem =currentMediaItem)
-
-                            Text(
-                                text = currentMediaItem.displayName,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp,
-                                maxLines = 2,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                softWrap = true,
-                                style = TextStyle(
-                                    color = Color.White,
-                                    shadow = Shadow(
-                                        color = Color.Black,
-                                        offset = Offset(2f, 2f),
-                                        blurRadius = 5f
-                                    )
-                                ),
-                                modifier = Modifier
-                                    .padding(6.dp)
-                                    .align(Alignment.BottomCenter)
-                            )
-                        }
+                        MediaCardViewContent(mediaIcon=mediaIcon, currentMediaItem= currentMediaItem)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun MediaCardViewContent(mediaIcon: ImageVector, currentMediaItem: LocalMediaItem) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Add media icon
+        Icon(
+            imageVector = mediaIcon,
+            contentDescription = currentMediaItem.displayName,
+            modifier = Modifier
+                .size(20.dp)
+                .padding(4.dp)
+        )
+
+        GlideImage(mediaItem =currentMediaItem)
+
+        Text(
+            text = currentMediaItem.displayName,
+            fontWeight = FontWeight.Bold,
+            fontSize = 10.sp,
+            maxLines = 2,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            softWrap = true,
+            style = TextStyle(
+                color = Color.White,
+                shadow = Shadow(
+                    color = Color.Black,
+                    offset = Offset(2f, 2f),
+                    blurRadius = 5f
+                )
+            ),
+            modifier = Modifier
+                .padding(6.dp)
+                .align(Alignment.BottomCenter)
+        )
     }
 }
 

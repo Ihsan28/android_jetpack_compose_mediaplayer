@@ -4,9 +4,10 @@ import android.content.Context
 import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
@@ -26,10 +27,10 @@ class GalleryViewModel(context: Context) : ViewModel() {
     // ExoPlayer instance
     val exoPlayer = ExoPlayer.Builder(context).build()
     val playerState = mutableStateOf(PlayerState())
-    var playerListener: Player.Listener? = null
+    private var playerListener: Player.Listener? = null
 
-    private val _Local_mediaItems = MutableStateFlow<List<LocalMediaItem>>(emptyList())
-    val localMediaItems: StateFlow<List<LocalMediaItem>> = _Local_mediaItems.asStateFlow()
+    private val _localMediaItems = MutableStateFlow<List<LocalMediaItem>>(emptyList())
+    val localMediaItems: StateFlow<List<LocalMediaItem>> = _localMediaItems.asStateFlow()
 
     private val _imageItems = MutableStateFlow<List<LocalMediaItem>>(emptyList())
     val imageItems: StateFlow<List<LocalMediaItem>> = _imageItems.asStateFlow()
@@ -39,6 +40,10 @@ class GalleryViewModel(context: Context) : ViewModel() {
 
     private val _audioItems = MutableStateFlow<List<LocalMediaItem>>(emptyList())
     val audioItems: StateFlow<List<LocalMediaItem>> = _audioItems.asStateFlow()
+
+    private val _songs = MutableLiveData<List<LocalMediaItem>>(emptyList())
+    val songs: LiveData<List<LocalMediaItem>>
+        get() = _songs
 
     init {
         loadMediaItems()
@@ -83,6 +88,7 @@ class GalleryViewModel(context: Context) : ViewModel() {
 //            }
 //        }
 
+        exoPlayer.stop()
         exoPlayer.setMediaSource(mediaSource)
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
@@ -123,9 +129,9 @@ class GalleryViewModel(context: Context) : ViewModel() {
     }
 
     private fun loadMediaItems() {
-        _Local_mediaItems.value = mediaRepository.getAllMedia()
+        _localMediaItems.value = mediaRepository.getAllMedia()
 
-        _Local_mediaItems.value.forEach { mediaItem ->
+        _localMediaItems.value.forEach { mediaItem ->
             when (mediaItem.type) {
                 MediaType.IMAGE -> _imageItems.value += mediaItem
                 MediaType.VIDEO -> _videoItems.value += mediaItem
