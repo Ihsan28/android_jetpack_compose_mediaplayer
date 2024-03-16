@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
@@ -33,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -44,7 +44,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.PopupProperties
+import androidx.lifecycle.viewModelScope
 import androidx.media3.ui.PlayerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
@@ -74,11 +74,14 @@ import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.ihsan.android_jetpack_compose_mediaplyer.R
+import com.ihsan.android_jetpack_compose_mediaplyer.model.GalleryTabPage
 import com.ihsan.android_jetpack_compose_mediaplyer.model.LocalMediaItem
 import com.ihsan.android_jetpack_compose_mediaplyer.model.MediaType
 import com.ihsan.android_jetpack_compose_mediaplyer.ui.screens.gallery.GalleryViewModel
 import com.skydoves.landscapist.rememberDrawablePainter
 import kotlinx.coroutines.launch
+import okhttp3.internal.notify
+import okhttp3.internal.notifyAll
 
 
 private const val TAG = "GalleryScreen"
@@ -94,34 +97,32 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
 
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(
-        pageCount = { 3 },
-        initialPageOffsetFraction = 2f,
-        initialPage = 1
-    )
+
     var showBottomSheet by remember { mutableStateOf(false) }
 
     // State variable to track the selected media item
     var selectedLocalMediaItem by remember { mutableStateOf<LocalMediaItem?>(null) }
     var selectedLocalMediaItemIndex by remember { mutableIntStateOf(0) }
+    var selectedMediaType by remember { mutableStateOf(MediaType.UNKNOWN) }
 
     val context = LocalContext.current
 
-    // Variable to keep track of the selected tab index
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-
-    // Filter media items based on the selected tab
-    val filteredMediaItems = when (selectedTabIndex) {
-        0 -> videoItems
-        1 -> audioItems
-        2 -> imageItems
-        else -> mediaItems
-    }
+    val tabPages = listOf(
+        GalleryTabPage(title = MediaType.VIDEO.name, items = videoItems),
+        GalleryTabPage(title = MediaType.AUDIO.name, items = audioItems),
+        GalleryTabPage(title = MediaType.IMAGE.name, items = imageItems)
+    )
+    val pagerState = rememberPagerState(
+        pageCount = { tabPages.size },
+        initialPageOffsetFraction = 0.0f,
+        initialPage = 0
+    )
+    var filteredMediaItems = mediaItems
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "Gallery") }
+                title = { Text(text = "Gallery") },
             )
         }
     ) {
@@ -134,28 +135,22 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                selectedTabIndex = selectedTabIndex,
+                selectedTabIndex = pagerState.currentPage,
                 contentColor = Color.Cyan
 
             ) {
-                // Video Tab
-                Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { selectedTabIndex = 0 }) { Text("Video") }
-
-                // Audio Tab
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { selectedTabIndex = 1 }) { Text("Audio") }
-
-                // Image Tab
-                Tab(
-                    selected = selectedTabIndex == 2,
-                    onClick = { selectedTabIndex = 2 }) { Text("Images") }
+                tabPages.forEachIndexed { index, tabPage ->
+                    Tab(
+                        selected = pagerState.currentPage == index,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        text = { Text(text = tabPage.title, fontSize = 14.sp) }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Show the bottom sheet when a media item is selected
             if (showBottomSheet) {
                 // Open the bottom sheet
                 ModalBottomSheet(
@@ -168,52 +163,67 @@ fun GalleryScreen(viewModel: GalleryViewModel) {
                     BottomSheetContent(
                         viewModel = viewModel,
                         selectedLocalMediaItem = selectedLocalMediaItem!!,
-                        filteredMediaItems = filteredMediaItems,
+                        filteredMediaItems = tabPages[pagerState.currentPage].items,
                         selectedLocalMediaItemIndex = selectedLocalMediaItemIndex
                     )
                 }
             }
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier
-                    .padding(8.dp)
-                    .fillMaxSize()
-            ) {
-                items(filteredMediaItems.size) { mediaIndex ->
-                    val currentMediaItem = filteredMediaItems[mediaIndex]
-                    val mediaIcon = when (currentMediaItem.type) {
-                        MediaType.VIDEO -> Icons.Default.Movie
-                        MediaType.AUDIO -> Icons.Default.MusicNote
-                        MediaType.IMAGE -> Icons.Default.Image
-                        else -> Icons.Default.Image
-                    }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth()
+            ) { page ->
+                filteredMediaItems = when (page) {
+                    0 -> tabPages[0].items
+                    1 -> tabPages[1].items
+                    2 -> tabPages[2].items
+                    else -> mediaItems
+                }
 
-                    Card(
-                        modifier = Modifier
-                            .padding(2.dp)
-                            .aspectRatio(1f)
-                            .clickable {
-                                // Update selected media item
-                                selectedLocalMediaItem = currentMediaItem
-                                selectedLocalMediaItemIndex = mediaIndex
-                                showBottomSheet = true
-                                // Open the bottom sheet
-                                scope.launch {
-                                    sheetState.show()
-                                }
-                            },
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = 10.dp
-                        )
-                    ) {
-                        MediaCardViewContent(mediaIcon=mediaIcon, currentMediaItem= currentMediaItem)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    items(tabPages[page].items.size) { mediaIndex ->
+                        val mediaItem = tabPages[page].items[mediaIndex]
+                        val mediaIcon = when (mediaItem.type) {
+                            MediaType.VIDEO -> Icons.Default.Movie
+                            MediaType.AUDIO -> Icons.Default.MusicNote
+                            MediaType.IMAGE -> Icons.Default.Image
+                            else -> Icons.Default.Image
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .padding(2.dp)
+                                .aspectRatio(1f)
+                                .clickable {
+                                    // Update selected media item
+                                    // ... (same logic for updating data)
+                                    selectedLocalMediaItem = mediaItem
+                                    selectedLocalMediaItemIndex = mediaIndex
+                                    showBottomSheet = true
+                                    scope.launch {
+                                        sheetState.show()
+                                    }
+                                },
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = 10.dp
+                            )
+                        ) {
+                            MediaCardViewContent(
+                                mediaIcon = mediaIcon,
+                                currentMediaItem = mediaItem
+                            )
+                        }
                     }
                 }
             }
+
         }
     }
 }
+
 
 @Composable
 fun MediaCardViewContent(mediaIcon: ImageVector, currentMediaItem: LocalMediaItem) {
@@ -227,7 +237,7 @@ fun MediaCardViewContent(mediaIcon: ImageVector, currentMediaItem: LocalMediaIte
                 .padding(4.dp)
         )
 
-        GlideImage(mediaItem =currentMediaItem)
+        GlideImage(mediaItem = currentMediaItem)
 
         Text(
             text = currentMediaItem.displayName,
@@ -253,21 +263,25 @@ fun MediaCardViewContent(mediaIcon: ImageVector, currentMediaItem: LocalMediaIte
 }
 
 @Composable
-fun GlideImage(mediaItem: LocalMediaItem, modifier: Modifier = Modifier,keepOriginalShape:Boolean=false) {
+fun GlideImage(
+    mediaItem: LocalMediaItem,
+    modifier: Modifier = Modifier,
+    keepOriginalShape: Boolean = false
+) {
     // Holding image data with MutableState
     var image by remember { mutableStateOf<Drawable?>(null) }
     // Fetching the Context inside Compose using LocalContext.current
     val context = LocalContext.current
-    val placeholder =when (mediaItem.type) {
+    val placeholder = when (mediaItem.type) {
         MediaType.VIDEO -> R.drawable.ic_video_placeholder
         MediaType.AUDIO -> R.drawable.ic_audio_placeholder
         MediaType.IMAGE -> R.drawable.ic_image_placeholder
         else -> R.drawable.ic_placeholder
     }
 
-    val imageShape=if(keepOriginalShape) FitCenter() else CenterCrop()
+    val imageShape = if (keepOriginalShape) FitCenter() else CenterCrop()
 
-    val customTarget=if(keepOriginalShape) {
+    val customTarget = if (keepOriginalShape) {
         object : CustomTarget<Drawable>() {
             override fun onResourceReady(
                 resource: Drawable,
@@ -280,7 +294,7 @@ fun GlideImage(mediaItem: LocalMediaItem, modifier: Modifier = Modifier,keepOrig
                 // Handle when the image load is cleared
             }
         }
-    }else{
+    } else {
         object : CustomTarget<Drawable>() {
             override fun onResourceReady(
                 resource: Drawable,
@@ -296,7 +310,7 @@ fun GlideImage(mediaItem: LocalMediaItem, modifier: Modifier = Modifier,keepOrig
     }
 
     // Loading the image using the Glide library
-    val glideRequest=Glide.with(context)
+    val glideRequest = Glide.with(context)
         .load(mediaItem.data)
         .transform(imageShape, RoundedCorners(8))
         .placeholder(placeholder)
@@ -349,7 +363,11 @@ fun BottomSheetContent(
             }
 
             MediaType.IMAGE -> {
-                GlideImage(mediaItem =selectedLocalMediaItem,modifier = Modifier.fillMaxSize(),keepOriginalShape = true)
+                GlideImage(
+                    mediaItem = selectedLocalMediaItem,
+                    modifier = Modifier.fillMaxSize(),
+                    keepOriginalShape = true
+                )
             }
 
             else -> {
@@ -366,11 +384,13 @@ fun VideoPlayerComponent(
     videoMediaItems: List<LocalMediaItem>,
     index: Int
 ) {
-    val selectedSong = remember { mutableStateOf(videoMediaItems[index]) }
+    var selectedSong by remember { mutableStateOf(videoMediaItems[index]) }
     var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
     // Display the video player
     Box {
-        MusicPlayer(song = selectedSong.value, viewModel)
+        MusicPlayer(song = selectedSong, viewModel)
         IconButton(onClick = { expanded = !expanded }) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
@@ -389,7 +409,7 @@ fun VideoPlayerComponent(
                 expanded = false
             })
         {
-            videoMediaItems.forEach { song ->
+            videoMediaItems.map { song ->
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -398,7 +418,9 @@ fun VideoPlayerComponent(
                         )
                     },
                     onClick = {
-                        selectedSong.value = song
+                        selectedSong = song
+                        viewModel.prepareMediaSource(selectedSong, context)
+                        expanded = false
 
                     }
                 )
@@ -416,6 +438,7 @@ fun AudioPlayerComponent(
 ) {
     val selectedSong = remember { mutableStateOf(audioMediaItems[index]) }
     var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     // Display the video player
     Box {
         MusicPlayer(song = selectedSong.value, viewModel)
@@ -447,8 +470,7 @@ fun AudioPlayerComponent(
                     },
                     onClick = {
                         selectedSong.value = song
-                        // Add navigation or playback actions
-                        viewModel.seekToPlayer(0)
+                        viewModel.prepareMediaSource(selectedSong.value, context)
                     }
                 )
             }

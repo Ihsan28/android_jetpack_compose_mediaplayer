@@ -23,3 +23,8 @@ data class PlayerState(
     val duration: Long = 0L,
     val error: String? = null
 )
+
+data class GalleryTabPage(
+    val title: String,
+    val items: List<LocalMediaItem>
+)
